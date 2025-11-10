@@ -1,0 +1,614 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Inventario Manual: Búsqueda por Supervisor y Sala</title>
+    <!-- Carga de Tailwind CSS para un diseño moderno y responsivo -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        /* Estilos personalizados */
+        .loading-overlay {
+            /* Estilo mantenido para el mensaje de carga de datos inicial */
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            font-weight: bold;
+            font-size: 1.25rem;
+            color: #1f2937;
+            text-align: center;
+            padding: 20px;
+        }
+    </style>
+</head>
+<body class="bg-gray-100 min-h-screen p-4 sm:p-8 font-sans">
+    <div class="max-w-3xl mx-auto bg-white shadow-2xl rounded-xl p-6 sm:p-10">
+
+        <header class="text-center mb-8">
+            <h1 class="text-4xl font-extrabold text-blue-800 mb-2">Búsqueda Manual de Inventario</h1>
+            <p class="text-gray-600">Busque artículos seleccionando Supervisor y Sala.</p>
+        </header>
+
+        <!-- PANTALLA DE CONFIGURACIÓN INICIAL (SELECCIÓN DE SUPERVISOR/SALA) -->
+        <div id="setup-screen" class="p-6 bg-blue-50 border-2 border-blue-200 rounded-lg shadow-inner">
+            <h2 class="text-xl font-bold text-blue-800 mb-4">Paso 1: Seleccionar Ubicación</h2>
+            
+            <div class="mb-4">
+                <label for="supervisor-select" class="block text-sm font-medium text-gray-700 mb-2">Seleccionar Supervisor:</label>
+                <!-- El select puede ser deshabilitado si solo se cambia la sala -->
+                <select id="supervisor-select" 
+                        class="w-full p-3 border-2 border-blue-300 rounded-lg focus:ring-blue-500 focus:border-blue-500 text-lg transition disabled:bg-gray-100 disabled:text-gray-500">
+                    <option value="" disabled selected>Cargando supervisores...</option>
+                </select>
+            </div>
+            
+            <div class="mb-6">
+                <label for="sala-name-select" class="block text-sm font-medium text-gray-700 mb-2">Seleccionar Nombre de Sala:</label>
+                <select id="sala-name-select" disabled
+                        class="w-full p-3 border-2 border-blue-300 rounded-lg focus:ring-blue-500 focus:border-blue-500 text-lg transition disabled:bg-gray-100 disabled:text-gray-500">
+                    <option value="" disabled selected>Seleccione un supervisor primero</option>
+                </select>
+            </div>
+
+            <button id="start-app-button" disabled
+                    class="mt-4 w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-6 rounded-lg shadow-md transition duration-300 transform hover:scale-[1.01] disabled:bg-blue-300">
+                Confirmar Sala y Continuar
+            </button>
+
+            <!-- BOTÓN DE RECARGA -->
+            <button id="refresh-data-button" 
+                    class="mt-3 w-full bg-gray-400 hover:bg-gray-500 text-white text-sm font-semibold py-2 px-6 rounded-lg shadow-sm transition duration-300">
+                Recargar Datos de Google Sheets (Refresh)
+            </button>
+
+            <p id="data-status" class="mt-3 text-sm text-center text-red-500 hidden"></p>
+        </div>
+        
+        <!-- PANTALLA PRINCIPAL DE BÚSQUEDA (Inicialmente oculta) -->
+        <div id="main-app" class="hidden">
+            <p id="current-sala-display" class="text-center text-lg font-semibold text-gray-700 mb-6 p-3 bg-yellow-100 border-l-4 border-yellow-500 rounded-lg shadow-md">
+                Supervisor: <span id="supervisor-value" class="text-red-700 font-bold"></span> | Sala Activa: <span id="sala-code-value" class="text-blue-700 font-bold"></span> 
+                (<span id="sala-name-value" class="text-gray-800 font-medium"></span>)
+            </p>
+
+            <!-- BÚSQUEDA MANUAL -->
+            <div id="manual-search" class="p-6 bg-gray-200 rounded-lg mb-6 shadow-xl">
+                <h3 class="text-xl font-semibold text-gray-800 mb-3">Búsqueda de Artículo</h3>
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-4">
+                    <input type="text" id="manual-barcode-input" placeholder="Ingresar Código de Barras (BARRA)" 
+                           inputmode="numeric" pattern="[0-9]*"
+                           class="w-full p-3 border border-gray-400 rounded-lg focus:ring-blue-500 focus:border-blue-500 transition">
+                    <input type="text" id="manual-article-input" placeholder="Ingresar Código de Artículo (ARTICULO)" 
+                           inputmode="numeric" pattern="[0-9]*"
+                           class="w-full p-3 border border-gray-400 rounded-lg focus:ring-blue-500 focus:border-blue-500 transition">
+                </div>
+                <button id="manual-search-button" 
+                        class="w-full bg-orange-500 hover:bg-orange-600 text-white font-bold py-3 px-4 rounded-lg shadow-md transition duration-300 transform hover:scale-[1.01]">
+                    Buscar Inventario
+                </button>
+                <p class="text-xs text-gray-600 mt-3 text-center">Nota: Sólo ingrese un valor a la vez (Código o Artículo).</p>
+            </div>
+            
+            <!-- Resultados de la Búsqueda de Inventario -->
+            <div class="mt-8">
+                <h2 class="text-2xl font-semibold text-gray-800 mb-4 border-b pb-2">Resultado del Inventario</h2>
+                
+                <div id="result-card" class="bg-gray-50 p-5 border border-gray-200 rounded-lg shadow-inner transition duration-300">
+                    <p id="scanned-code" class="text-lg font-mono text-gray-700 mb-3">
+                        <span class="font-bold text-gray-900">Criterio Buscado:</span> N/A
+                    </p>
+                    <div id="inventory-data">
+                        <p class="text-gray-500">Ingrese un valor para buscar en el inventario de la sala actual.</p>
+                    </div>
+                </div>
+                
+                <!-- Mensaje de Alerta/Error -->
+                <div id="alert-message" class="mt-4 hidden p-3 rounded-lg text-sm font-medium bg-red-100 text-red-700 border border-red-300">
+                    
+                </div>
+            </div>
+
+            <!-- BOTONES DE NUEVA CONSULTA -->
+            <div class="mt-8 pt-4 border-t border-gray-300 grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <button id="change-sala-button" 
+                        class="w-full bg-purple-600 hover:bg-purple-700 text-white font-bold py-3 px-6 rounded-lg shadow-md transition duration-300 transform hover:scale-[1.01]">
+                    Cambiar Sala (Mismo Supervisor)
+                </button>
+                <button id="new-query-button" 
+                        class="w-full bg-gray-500 hover:bg-gray-600 text-white font-bold py-3 px-6 rounded-lg shadow-md transition duration-300 transform hover:scale-[1.01]">
+                    Nueva Consulta (Cambiar Supervisor)
+                </button>
+            </div>
+        </div>
+
+    </div>
+
+    <script>
+        // --- 1. CONFIGURACIÓN, VARIABLES Y DATOS ---
+        
+        let inventoryArray = []; // Aquí se almacenarán los datos del CSV parseado
+        let currentSalaCode = ''; // Código de sala usado para la búsqueda (se obtiene del NOMBE_SALA)
+        let salasBySupervisor = {}; // {Supervisor: [{sala_name, sala_code}, ...]}
+        let salaCodeMap = {}; // {NOMBE_SALA: COD_SALA}
+        let currentSupervisorName = '';
+        
+        // URL del archivo de inventario.
+        // IMPORTANTE: Si reemplazas el archivo en Drive, obtén una NUEVA URL de "Publicar en la web".
+        // La mejor práctica es COPIAR y PEGAR los nuevos datos en la HOJA de cálculo ya publicada para mantener el mismo ID.
+        // ENLACE ACTUALIZADO POR EL USUARIO:
+        const CSV_FILE_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vR90oj-EdHyqexUB4wxBfq81uL9uhhjv5dJO7vFdDjVZX-Vgu-cp9o4OQlQlmhsUu69-Y10vGexKPak/pub?output=csv";
+        
+        // Se ajusta el delimitador a la barra vertical '|'
+        const CSV_DELIMITER = "|"; 
+
+        // Datos CSV de prueba (CORREGIDO el encabezado a 'PEDIDO SALA' en singular)
+        const testCSVData = `BARRA|COD_SALA|NOMBE_SALA|ARTICULO|DESCRIPCION|MARCA|STATUS MARCA|STOCK RANSA cajas|EXISTENCIA|TRANSITOS A SALAS UDS|DOH|SUPERVISOR|FECHA ACTUALIZACION|PEDIDO SALA
+7501000199991|12|Almacén Principal|100559|Laptop Ultradelgada|SONY|Activa|10|15|5|30|Juan Pérez|2023-10-25|Urgente
+7501000199991|21|SALA CENTRAL LOGÍSTICA|100559|Core i7 16GB RAM|SONY|Activa|5|8|2|45|María López|2023-10-26|Normal
+8601000212345|12|Almacén Principal|Teclado Mecánico|Switches Blue|LOGITECH|Activa|20|45|0|60|Juan Pérez|2023-10-27|Urgente
+9999000300003|21|SALA CENTRAL LOGÍSTICA|Mouse Ergonómico|Inalámbrico|HP|Pendiente|100|120|10|90|María López|2023-10-28|Baja
+8601000212346|33|SALA REMOTA DE REPUESTOS|Monitor 27 Pulgadas|Curvo 144Hz|SAMSUNG|Activa|5|5|1|10|Juan Pérez|2023-10-29|Normal
+9999000300004|33|SALA REMOTA DE REPUESTOS|Cable HDMI|Ultra HD|GENERICO|Activa|200|250|0|90|Juan Pérez|2023-10-30|Baja
+`;
+
+        // Variables del DOM
+        const scannedCodeDisplay = document.getElementById('scanned-code');
+        const inventoryDataDisplay = document.getElementById('inventory-data');
+        const alertMessage = document.getElementById('alert-message');
+        const setupScreen = document.getElementById('setup-screen');
+        const mainApp = document.getElementById('main-app');
+        
+        const supervisorSelect = document.getElementById('supervisor-select');
+        const salaNameSelect = document.getElementById('sala-name-select');
+        const startAppButton = document.getElementById('start-app-button'); 
+        const refreshDataButton = document.getElementById('refresh-data-button'); // Nuevo botón de recarga
+        
+        const salaCodeValueDisplay = document.getElementById('sala-code-value');
+        const salaNameValueDisplay = document.getElementById('sala-name-value'); 
+        const supervisorValueDisplay = document.getElementById('supervisor-value'); 
+        const dataStatusDisplay = document.getElementById('data-status');
+        const manualBarcodeInput = document.getElementById('manual-barcode-input');
+        const manualArticleInput = document.getElementById('manual-article-input');
+        const manualSearchButton = document.getElementById('manual-search-button');
+        const newQueryButton = document.getElementById('new-query-button'); // Botón para CAMBIAR SUPERVISOR
+        const changeSalaButton = document.getElementById('change-sala-button'); // Nuevo Botón para CAMBIAR SALA
+
+        // --- 2. LÓGICA DE DATOS CSV ---
+
+        /**
+         * Parsea una cadena de texto CSV a un Array de objetos JavaScript.
+         * @param {string} csvText El contenido del archivo CSV.
+         * @returns {Array} Un array de objetos con los datos del inventario.
+         */
+        function parseCSV(csvText) {
+            const lines = csvText.trim().split('\n').filter(line => line.trim() !== ''); // Filtra líneas vacías
+            if (lines.length === 0) return [];
+
+            // Usar la variable CSV_DELIMITER para dividir encabezados y valores
+            // Usar trim() para limpiar encabezados de posibles espacios accidentales
+            const headers = lines[0].split(CSV_DELIMITER).map(header => header.trim());
+            const data = [];
+
+            for (let i = 1; i < lines.length; i++) {
+                // Usar la variable CSV_DELIMITER para dividir valores
+                const values = lines[i].split(CSV_DELIMITER);
+                if (values.length === headers.length) {
+                    const row = {};
+                    headers.forEach((header, index) => {
+                        // Eliminamos comillas y espacios para asegurar la limpieza de los datos
+                        row[header] = values[index].trim().replace(/"/g, ''); 
+                    });
+                    data.push(row);
+                }
+            }
+            return data;
+        }
+
+        /**
+         * Preprocesa los datos cargados para llenar los dropdowns.
+         */
+        function preprocessInventoryData() {
+            salasBySupervisor = {};
+            salaCodeMap = {};
+            const uniqueSalas = new Set();
+            
+            // Recorre el inventario para construir las estructuras necesarias
+            inventoryArray.forEach(row => {
+                const supervisor = (row.SUPERVISOR || 'Sin Supervisor').trim();
+                const salaName = (row.NOMBE_SALA || 'Sin Nombre de Sala').trim();
+                const salaCode = (row.COD_SALA || '').trim();
+
+                // 1. Crear el mapa de salas por supervisor (solo una vez por sala)
+                if (!salasBySupervisor[supervisor]) {
+                    salasBySupervisor[supervisor] = [];
+                }
+
+                const uniqueKey = `${supervisor}|${salaName}`;
+                if (!uniqueSalas.has(uniqueKey)) {
+                    salasBySupervisor[supervisor].push({ name: salaName, code: salaCode });
+                    uniqueSalas.add(uniqueKey);
+                }
+
+                // 2. Crear el mapa de Nombre de Sala -> Código de Sala
+                salaCodeMap[salaName] = salaCode;
+            });
+        }
+
+        /**
+         * Carga el inventario desde la URL de Google Sheets o usa datos de prueba.
+         */
+        async function loadInventoryData() {
+            // Deshabilitar botones y limpiar dropdowns mientras carga
+            supervisorSelect.disabled = true;
+            salaNameSelect.disabled = true;
+            startAppButton.disabled = true;
+            refreshDataButton.disabled = true;
+
+            dataStatusDisplay.classList.remove('hidden', 'text-green-600', 'text-red-500');
+            dataStatusDisplay.textContent = "Cargando datos de Google Sheets...";
+            dataStatusDisplay.classList.add('text-blue-500');
+
+            // Limpiar dropdowns
+            supervisorSelect.innerHTML = '<option value="" disabled selected>Cargando supervisores...</option>';
+            salaNameSelect.innerHTML = '<option value="" disabled selected>Seleccione un supervisor primero</option>';
+
+            try {
+                // --- MODIFICACIÓN CLAVE: AGREGAR TIMESTAMP PARA FORZAR LA RECARGA ---
+                // Esto fuerza a ignorar la caché del navegador/servidor.
+                const uniqueUrl = `${CSV_FILE_URL}&_t=${new Date().getTime()}`;
+                
+                // Intento de cargar desde la URL real de Google Sheets (no-store es una segunda capa de defensa)
+                const response = await fetch(uniqueUrl, { cache: 'no-store' }); 
+                if (!response.ok) {
+                    // Mostrar un mensaje de error claro si el fetch falla por HTTP
+                    throw new Error(`Error HTTP: ${response.status}. Verifique que el enlace esté publicado y sea accesible.`);
+                }
+                const csvText = await response.text();
+                
+                // Si el CSV es demasiado corto (solo encabezados), lanzamos error para usar fallback
+                if (csvText.trim().split('\n').filter(line => line.trim() !== '').length <= 1) {
+                     throw new Error("El CSV público está vacío o solo contiene encabezados.");
+                }
+
+                inventoryArray = parseCSV(csvText);
+                
+                if (inventoryArray.length > 0) {
+                    preprocessInventoryData(); // Preprocesar los datos cargados
+                    populateSupervisorDropdown(); // Llenar el primer dropdown
+                    
+                    dataStatusDisplay.textContent = `✅ Inventario cargado: ${inventoryArray.length} registros desde Drive.`;
+                    dataStatusDisplay.classList.remove('text-blue-500', 'text-red-500');
+                    dataStatusDisplay.classList.add('text-green-600');
+                    supervisorSelect.disabled = false;
+                    refreshDataButton.disabled = false; // Habilitar si la carga es exitosa
+                    return true;
+                } else {
+                    throw new Error("El archivo CSV está vacío después del parseo.");
+                }
+
+            } catch (error) {
+                console.error("Error al cargar el inventario de Drive:", error);
+                
+                // Mostrar un mensaje de error CRÍTICO en la pantalla
+                dataStatusDisplay.textContent = `❌ ERROR CRÍTICO AL CARGAR INVENTARIO: ${error.message}.`;
+                dataStatusDisplay.classList.remove('text-blue-500', 'text-green-600');
+                dataStatusDisplay.classList.add('text-red-500', 'p-2', 'border-2', 'border-red-500', 'rounded-md', 'font-bold');
+
+                // Fallback: Usar datos de prueba
+                inventoryArray = parseCSV(testCSVData);
+                
+                if (inventoryArray.length > 0) {
+                    preprocessInventoryData(); // Preprocesar los datos cargados
+                    populateSupervisorDropdown(); // Llenar el primer dropdown
+                    
+                    dataStatusDisplay.textContent += ` | ⚠️ Usando ${inventoryArray.length} registros de PRUEBA. Revise su enlace.`;
+                    dataStatusDisplay.classList.add('text-sm');
+                    supervisorSelect.disabled = false;
+                    refreshDataButton.disabled = false;
+                    return true;
+                } else {
+                    dataStatusDisplay.textContent += ` | ❌ Los datos de prueba también fallaron. La aplicación no funcionará.`;
+                    supervisorSelect.disabled = true;
+                    refreshDataButton.disabled = true;
+                    return false;
+                }
+            }
+        }
+
+        /**
+         * Rellena el primer dropdown con la lista única de supervisores.
+         */
+        function populateSupervisorDropdown(preselectSupervisor = null) {
+            supervisorSelect.innerHTML = '<option value="" disabled selected>Seleccione un supervisor</option>';
+            const supervisors = Object.keys(salasBySupervisor).sort();
+
+            supervisors.forEach(supervisor => {
+                const option = document.createElement('option');
+                option.value = supervisor;
+                option.textContent = supervisor;
+                
+                if (preselectSupervisor && supervisor === preselectSupervisor) {
+                    option.selected = true;
+                }
+
+                supervisorSelect.appendChild(option);
+            });
+        }
+
+        /**
+         * Rellena el dropdown de Sala basado en el supervisor seleccionado.
+         */
+        function populateSalaDropdown(selectedSupervisor) {
+            salaNameSelect.innerHTML = '<option value="" disabled selected>Seleccione una sala</option>';
+            salaNameSelect.disabled = true;
+            startAppButton.disabled = true;
+
+            const salas = salasBySupervisor[selectedSupervisor] || [];
+            
+            if (salas.length > 0) {
+                // Ordenar las salas alfabéticamente por nombre
+                salas.sort((a, b) => a.name.localeCompare(b.name));
+
+                salas.forEach(sala => {
+                    const option = document.createElement('option');
+                    option.value = sala.name;
+                    option.textContent = `${sala.name} (Cód: ${sala.code})`;
+                    salaNameSelect.appendChild(option);
+                });
+                salaNameSelect.disabled = false;
+            } else {
+                 salaNameSelect.innerHTML = '<option value="" disabled selected>No hay salas para este supervisor</option>';
+            }
+        }
+        
+        // --- 3. LÓGICA DE BÚSQUEDA ---
+
+        /**
+         * Busca en el inventario con el criterio y la columna especificados.
+         * @param {string} value El valor a buscar (código de barra o artículo).
+         * @param {string} column La columna a buscar ('BARRA' o 'ARTICULO').
+         */
+        function lookupInventory(value, column) {
+            alertMessage.classList.add('hidden');
+            scannedCodeDisplay.innerHTML = `<span class="font-bold text-gray-900">Criterio Buscado (${column}):</span> ${value}`;
+            
+            // Normalizar el valor de búsqueda principal (BARRA/ARTICULO) a mayúsculas.
+            const normalizedValue = value.toUpperCase();
+            
+            // Búsqueda con DOBLE CRITERIO: Valor ingresado y COD_SALA
+            const item = inventoryArray.find(
+                row => 
+                    // Comparación de columna principal (BARRA o ARTICULO), trim y toUpperCase
+                    ((row[column] || '').trim().toUpperCase() === normalizedValue) && 
+                    // Comparación de COD_SALA, trim para asegurar limpieza
+                    ((row.COD_SALA || '').trim() === currentSalaCode)
+            );
+
+            document.getElementById('result-card').classList.remove('bg-green-50', 'ring-2', 'ring-green-400', 'bg-red-50', 'ring-red-400', 'bg-gray-50');
+            
+            // Extracción segura de datos para la visualización
+            const stockRansaKey = 'STOCK RANSA cajas'; 
+            const displayStockRansa = item ? (item[stockRansaKey] || item['STOCK RANSA'] || 'N/A') : 'N/A';
+            const displaySupervisor = item ? (item.SUPERVISOR || 'N/A') : 'N/A';
+            const displaySalaCode = item ? item.COD_SALA : 'N/A';
+            const displaySalaName = item ? item.NOMBE_SALA : 'N/A';
+            const displayArticulo = item ? item.ARTICULO : 'N/A';
+            const displayDescripcion = item ? item.DESCRIPCION : 'N/A';
+            const displayMarca = item ? item.MARCA : 'N/A';
+            const displayStatusMarca = item ? item['STATUS MARCA'] : 'N/A';
+            const displayExistencia = item ? item.EXISTENCIA : 'N/A';
+            const displayTransitos = item ? (item['TRANSITOS A SALAS UDS'] || '0') : '0';
+            const displayDOH = item ? item.DOH : 'N/A';
+            const displayFechaActualizacion = item ? (item['FECHA ACTUALIZACION'] || 'N/A') : 'N/A';
+            // CORREGIDO: Usando 'PEDIDO SALA' en singular
+            const displaySegmentacion = item ? (item['PEDIDO SALA'] || 'N/A') : 'N/A'; 
+            
+            if (item) {
+                // Si el artículo es encontrado
+                inventoryDataDisplay.innerHTML = `
+                    <div class="space-y-2 text-gray-800">
+                        <p><span class="font-semibold text-blue-700">Supervisor:</span> ${displaySupervisor}</p>
+                        <p><span class="font-semibold text-blue-700">Código de Sala:</span> ${displaySalaCode}</p>
+                        <p><span class="font-semibold text-blue-700">Nombre de Sala:</span> ${displaySalaName}</p>
+                        <p><span class="font-semibold text-blue-700">Artículo:</span> ${displayArticulo}</p>
+                        <p><span class="font-semibold text-blue-700">Descripción:</span> ${displayDescripcion}</p>
+                        <p><span class="font-semibold text-blue-700">Marca:</span> ${displayMarca}</p>
+                        <p><span class="font-semibold text-blue-700">Status Marca:</span> ${displayStatusMarca}</p>
+                        <p><span class="font-semibold text-blue-700">Stock RANSA cajas:</span> <span class="font-bold text-green-600">${displayStockRansa}</span></p>
+                        <p><span class="font-semibold text-blue-700">Existencia:</span> <span class="font-bold text-green-600">${displayExistencia}</span></p>
+                        <p><span class="font-semibold text-blue-700">Tránsitos:</span> <span class="font-bold text-yellow-600">${displayTransitos}</span></p>
+                        <p><span class="font-semibold text-blue-700">Segmentación:</span> <span class="font-bold text-purple-700">${displaySegmentacion}</span></p>
+                        <p><span class="font-semibold text-blue-700">DOH:</span> ${displayDOH}</p>
+                        <p><span class="font-semibold text-blue-700">Fecha Actualización:</span> <span class="font-bold text-gray-800">${displayFechaActualizacion}</span></p>
+                    </div>
+                `;
+                document.getElementById('result-card').classList.add('bg-green-50', 'ring-2', 'ring-green-400');
+            } else {
+                // Si el artículo NO es encontrado
+                inventoryDataDisplay.innerHTML = `
+                    <p class="text-red-600 font-semibold">
+                        ⚠️ NO ENCONTRADO en la sala <span class="font-bold">${currentSalaCode}</span>.
+                        <br>Búsqueda por **${column}**: ${value}
+                        <br>Verifique los valores ingresados.
+                    </p>
+                `;
+                document.getElementById('result-card').classList.add('bg-red-50', 'ring-2', 'ring-red-400');
+            }
+        }
+
+
+        // --- 4. LÓGICA DE BÚSQUEDA MANUAL ---
+
+        function handleManualSearch() {
+            const barcode = manualBarcodeInput.value.trim();
+            const article = manualArticleInput.value.trim();
+
+            if (!barcode && !article) {
+                alertMessage.textContent = "🚨 Por favor, ingrese un Código de Barras o un ARTICULO para buscar.";
+                alertMessage.classList.remove('hidden');
+                alertMessage.classList.remove('bg-red-100', 'text-red-700');
+                alertMessage.classList.add('bg-yellow-100', 'text-yellow-700');
+                return;
+            }
+
+            // Restablecer el mensaje de alerta
+            alertMessage.classList.add('hidden');
+            
+            // Priorizar Código de Barras si ambos están llenos
+            if (barcode) {
+                lookupInventory(barcode, 'BARRA');
+                // Limpiar campos después de la búsqueda exitosa
+                manualBarcodeInput.value = '';
+                manualArticleInput.value = '';
+            } else if (article) {
+                lookupInventory(article, 'ARTICULO');
+                // Limpiar campos después de la búsqueda exitosa
+                manualBarcodeInput.value = '';
+                manualArticleInput.value = '';
+            }
+        }
+
+        // --- 5. LÓGICA DE PANTALLA INICIAL Y EVENTOS ---
+
+        /**
+         * Muestra la aplicación principal. Obtiene el COD_SALA del NOMBE_SALA seleccionado.
+         */
+        function showMainApp() {
+            const selectedSalaName = salaNameSelect.value;
+            const selectedSupervisor = supervisorSelect.value;
+            
+            if (!selectedSalaName) {
+                dataStatusDisplay.textContent = "⚠️ Por favor, seleccione una Sala para continuar.";
+                dataStatusDisplay.classList.remove('hidden');
+                dataStatusDisplay.classList.add('text-red-500');
+                return;
+            }
+            
+            // 1. Obtener el COD_SALA real
+            currentSalaCode = salaCodeMap[selectedSalaName];
+            currentSupervisorName = selectedSupervisor;
+
+            // 2. Actualizar la interfaz
+            supervisorValueDisplay.textContent = currentSupervisorName;
+            salaCodeValueDisplay.textContent = currentSalaCode;
+            salaNameValueDisplay.textContent = selectedSalaName;
+            
+            // 3. Transicionar
+            setupScreen.classList.add('hidden');
+            mainApp.classList.remove('hidden');
+
+            // 4. Limpiar y enfocar
+            inventoryDataDisplay.innerHTML = '<p class="text-gray-500">Ingrese un valor para buscar en el inventario de la sala actual.</p>';
+            scannedCodeDisplay.innerHTML = '<span class="font-bold text-gray-900">Criterio Buscado:</span> N/A';
+            document.getElementById('result-card').classList.remove('bg-green-50', 'ring-2', 'ring-green-400', 'bg-red-50', 'ring-red-400');
+            document.getElementById('result-card').classList.add('bg-gray-50');
+            
+            manualBarcodeInput.focus();
+        }
+
+        /**
+         * Reinicia la aplicación para seleccionar un NUEVO SUPERVISOR.
+         */
+        function startNewSupervisorQuery() {
+            // Ocultar la pantalla principal y mostrar la de setup
+            mainApp.classList.add('hidden');
+            setupScreen.classList.remove('hidden');
+
+            // Restablecer el supervisor dropdown a su estado inicial
+            supervisorSelect.disabled = false;
+            populateSupervisorDropdown();
+            
+            // Limpiar la sala
+            salaNameSelect.innerHTML = '<option value="" disabled selected>Seleccione un supervisor primero</option>';
+            salaNameSelect.disabled = true;
+            startAppButton.disabled = true;
+            
+            // Limpiar campos y mensajes
+            manualBarcodeInput.value = '';
+            manualArticleInput.value = '';
+            dataStatusDisplay.classList.add('hidden');
+            alertMessage.classList.add('hidden');
+            
+            // Limpiar resultados visuales
+            document.getElementById('result-card').classList.remove('bg-green-50', 'ring-2', 'ring-green-400', 'bg-red-50', 'ring-red-400');
+            document.getElementById('result-card').classList.add('bg-gray-50');
+
+            supervisorSelect.focus();
+        }
+
+        /**
+         * Reinicia la aplicación para seleccionar una NUEVA SALA, manteniendo el supervisor actual.
+         */
+        function startNewSala() {
+            // Ocultar la pantalla principal y mostrar la de setup
+            mainApp.classList.add('hidden');
+            setupScreen.classList.remove('hidden');
+
+            // Configurar el supervisor actual y deshabilitar el dropdown
+            supervisorSelect.value = currentSupervisorName;
+            supervisorSelect.disabled = true;
+
+            // Rellenar la lista de salas para el supervisor actual
+            populateSalaDropdown(currentSupervisorName);
+            
+            // Restablecer la sala seleccionada a default
+            salaNameSelect.value = ''; 
+            startAppButton.disabled = true;
+
+            // Limpiar campos y mensajes
+            manualBarcodeInput.value = '';
+            manualArticleInput.value = '';
+            dataStatusDisplay.classList.add('hidden');
+            alertMessage.classList.add('hidden');
+            
+            // Limpiar resultados visuales
+            document.getElementById('result-card').classList.remove('bg-green-50', 'ring-2', 'ring-green-400', 'bg-red-50', 'ring-red-400');
+            document.getElementById('result-card').classList.add('bg-gray-50');
+
+            salaNameSelect.focus();
+        }
+
+        // --- EVENT LISTENERS ---
+
+        // 1. Supervisor selecciona un valor -> Rellena Sala
+        supervisorSelect.addEventListener('change', (e) => {
+            populateSalaDropdown(e.target.value);
+        });
+
+        // 2. Sala selecciona un valor -> Habilita el botón de inicio
+        salaNameSelect.addEventListener('change', () => {
+            startAppButton.disabled = false;
+            dataStatusDisplay.classList.add('hidden'); // Oculta el mensaje si todo está bien
+        });
+
+        // 3. Botón de inicio
+        startAppButton.addEventListener('click', showMainApp);
+
+        // Eventos de Búsqueda Manual
+        manualSearchButton.addEventListener('click', handleManualSearch);
+        manualBarcodeInput.addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') {
+                handleManualSearch();
+            }
+        });
+        manualArticleInput.addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') {
+                handleManualSearch();
+            }
+        });
+
+        // Evento del botón Nueva Consulta (Cambiar Supervisor)
+        newQueryButton.addEventListener('click', startNewSupervisorQuery);
+        
+        // Evento del botón Cambiar Sala (Mismo Supervisor)
+        changeSalaButton.addEventListener('click', startNewSala);
+
+        // Evento del botón Recargar Datos
+        refreshDataButton.addEventListener('click', loadInventoryData);
+
+        // Cargar datos al iniciar la página
+        window.onload = loadInventoryData;
+
+    </script>
+</body>
+</html>
