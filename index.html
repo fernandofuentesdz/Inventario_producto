@@ -82,11 +82,8 @@
                            inputmode="numeric" pattern="[0-9]*"
                            class="w-full p-3 border border-gray-400 rounded-lg focus:ring-blue-500 focus:border-blue-500 transition">
                 </div>
-                <button id="manual-search-button" 
-                        class="w-full bg-orange-500 hover:bg-orange-600 text-white font-bold py-3 px-4 rounded-lg shadow-md transition duration-300 transform hover:scale-[1.01]">
-                    Buscar Inventario
-                </button>
-                <p class="text-xs text-gray-600 mt-3 text-center">Nota: Sólo ingrese un valor a la vez (Código o Artículo).</p>
+                <!-- SE ELIMINA EL BOTÓN DE BÚSQUEDA -->
+                <p class="text-xs text-gray-600 mt-3 text-center">Escriba el código en el campo correspondiente. La búsqueda es automática.</p>
             </div>
             
             <!-- Resultados de la Búsqueda de Inventario -->
@@ -133,10 +130,8 @@
         let currentSupervisorName = '';
         
         // URL del archivo de inventario.
-        // IMPORTANTE: Si reemplazas el archivo en Drive, obtén una NUEVA URL de "Publicar en la web".
-        // La mejor práctica es COPIAR y PEGAR los nuevos datos en la HOJA de cálculo ya publicada para mantener el mismo ID.
         // ENLACE ACTUALIZADO POR EL USUARIO:
-        const CSV_FILE_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vSHY2DFyquIGunl7Q_ggVwnHRebdL7eJEG2Iec_HiTmY7GZEtQgFvRy_86ZS5SVWUGjKjLQ9BJ12aQW/pub?output=csv";
+        const CSV_FILE_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vR90oj-EdHyqexUB4wxBfq81uL9uhhjv5dJO7vFdDjVZX-Vgu-cp9o4OQlQlmhsUu69-Y10vGexKPak/pub?output=csv";
         
         // Se ajusta el delimitador a la barra vertical '|'
         const CSV_DELIMITER = "|"; 
@@ -161,7 +156,7 @@
         const supervisorSelect = document.getElementById('supervisor-select');
         const salaNameSelect = document.getElementById('sala-name-select');
         const startAppButton = document.getElementById('start-app-button'); 
-        const refreshDataButton = document.getElementById('refresh-data-button'); // Nuevo botón de recarga
+        const refreshDataButton = document.getElementById('refresh-data-button'); 
         
         const salaCodeValueDisplay = document.getElementById('sala-code-value');
         const salaNameValueDisplay = document.getElementById('sala-name-value'); 
@@ -169,9 +164,13 @@
         const dataStatusDisplay = document.getElementById('data-status');
         const manualBarcodeInput = document.getElementById('manual-barcode-input');
         const manualArticleInput = document.getElementById('manual-article-input');
-        const manualSearchButton = document.getElementById('manual-search-button');
-        const newQueryButton = document.getElementById('new-query-button'); // Botón para CAMBIAR SUPERVISOR
-        const changeSalaButton = document.getElementById('change-sala-button'); // Nuevo Botón para CAMBIAR SALA
+        
+        // El botón de búsqueda manual fue eliminado, pero la referencia aún puede existir, 
+        // así que la omitimos de las variables DOM si no está en el HTML
+        // const manualSearchButton = document.getElementById('manual-search-button'); 
+
+        const newQueryButton = document.getElementById('new-query-button'); 
+        const changeSalaButton = document.getElementById('change-sala-button'); 
 
         // --- 2. LÓGICA DE DATOS CSV ---
 
@@ -185,8 +184,8 @@
             if (lines.length === 0) return [];
 
             // Usar la variable CSV_DELIMITER para dividir encabezados y valores
-            // Usar trim() para limpiar encabezados de posibles espacios accidentales
             const headers = lines[0].split(CSV_DELIMITER).map(header => header.trim());
+            
             const data = [];
 
             for (let i = 1; i < lines.length; i++) {
@@ -238,7 +237,6 @@
          * Carga el inventario desde la URL de Google Sheets o usa datos de prueba.
          */
         async function loadInventoryData() {
-            // Deshabilitar botones y limpiar dropdowns mientras carga
             supervisorSelect.disabled = true;
             salaNameSelect.disabled = true;
             startAppButton.disabled = true;
@@ -248,7 +246,6 @@
             dataStatusDisplay.textContent = "Cargando datos de Google Sheets...";
             dataStatusDisplay.classList.add('text-blue-500');
 
-            // Limpiar dropdowns
             supervisorSelect.innerHTML = '<option value="" disabled selected>Cargando supervisores...</option>';
             salaNameSelect.innerHTML = '<option value="" disabled selected>Seleccione un supervisor primero</option>';
 
@@ -442,29 +439,29 @@
         function handleManualSearch() {
             const barcode = manualBarcodeInput.value.trim();
             const article = manualArticleInput.value.trim();
-
-            if (!barcode && !article) {
-                alertMessage.textContent = "🚨 Por favor, ingrese un Código de Barras o un ARTICULO para buscar.";
-                alertMessage.classList.remove('hidden');
-                alertMessage.classList.remove('bg-red-100', 'text-red-700');
-                alertMessage.classList.add('bg-yellow-100', 'text-yellow-700');
-                return;
-            }
-
-            // Restablecer el mensaje de alerta
-            alertMessage.classList.add('hidden');
             
-            // Priorizar Código de Barras si ambos están llenos
+            // Borramos el mensaje de error general cada vez que se intenta buscar
+            alertMessage.classList.add('hidden');
+
+            // 1. Prioridad: BARRA (Búsqueda Exacta)
             if (barcode) {
                 lookupInventory(barcode, 'BARRA');
-                // Limpiar campos después de la búsqueda exitosa
-                manualBarcodeInput.value = '';
+                // Limpiar el campo opuesto al buscar
                 manualArticleInput.value = '';
-            } else if (article) {
+
+            } 
+            // 2. Prioridad: ARTICULO (Búsqueda Exacta)
+            else if (article) {
                 lookupInventory(article, 'ARTICULO');
-                // Limpiar campos después de la búsqueda exitosa
+                // Limpiar el campo opuesto al buscar
                 manualBarcodeInput.value = '';
-                manualArticleInput.value = '';
+            }
+            // 3. Si ambos campos están vacíos, restablecer la vista de resultados.
+            else if (!barcode && !article) {
+                scannedCodeDisplay.innerHTML = '<span class="font-bold text-gray-900">Criterio Buscado:</span> N/A';
+                inventoryDataDisplay.innerHTML = '<p class="text-gray-500">Ingrese un valor para buscar en el inventario de la sala actual.</p>';
+                document.getElementById('result-card').classList.remove('bg-green-50', 'ring-2', 'ring-green-400', 'bg-red-50', 'ring-red-400');
+                document.getElementById('result-card').classList.add('bg-gray-50');
             }
         }
 
@@ -584,15 +581,20 @@
         // 3. Botón de inicio
         startAppButton.addEventListener('click', showMainApp);
 
-        // Eventos de Búsqueda Manual
-        manualSearchButton.addEventListener('click', handleManualSearch);
+        // 4. Eventos de Búsqueda Manual (AHORA USANDO keyup para búsqueda instantánea)
+        manualBarcodeInput.addEventListener('keyup', handleManualSearch);
+        manualArticleInput.addEventListener('keyup', handleManualSearch);
+        
+        // El evento keypress (Enter) se mantiene solo como redundancia, pero keyup es el principal.
         manualBarcodeInput.addEventListener('keypress', (e) => {
             if (e.key === 'Enter') {
+                e.preventDefault(); // Prevenir submit de formulario
                 handleManualSearch();
             }
         });
         manualArticleInput.addEventListener('keypress', (e) => {
             if (e.key === 'Enter') {
+                e.preventDefault();
                 handleManualSearch();
             }
         });
@@ -612,5 +614,6 @@
     </script>
 </body>
 </html>
+
 
 
